@@ -1,0 +1,13 @@
+# bytecode python
+
+__pycache__/
+
+# ambiente virtual
+
+.venv/
+
+# minhas configurações
+
+preferences.ini
+*.session
+*.db
