@@ -1,4 +1,5 @@
 import sqlite3
+import models
 
 class DataBase:
     def __init__(self) -> None:
@@ -15,3 +16,17 @@ class DataBase:
         for sql in querys:
             self.cursor.execute(sql)
         self.conn.commit()
+    
+    # adicionar um grupo ou canal no banco
+    
+    def insert_chat(self, chat:models.Chat):
+        sql = "INSERT INTO chats (chat_id, title, type) VALUES (?,?,?)"
+        self.cursor.execute(sql,(chat.chat_id ,chat.title, chat.type_,))
+        return self.conn.commit()
+    
+    # remover um grupo ou canal no banco
+    
+    def delete_chat(self, chat:models.Chat):
+        sql = "DELETE FROM chats WHERE chat_id = ?"
+        self.cursor.execute(sql,(chat.chat_id,))
+        return self.conn.commit()
