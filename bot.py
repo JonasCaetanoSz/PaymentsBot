@@ -57,7 +57,10 @@ class Bot:
             api_id=self.telethon_api_id
         )
         await client.start()
-        chat = await client.get_entity(profile_identifier)
+        try:
+            chat = await client.get_entity(profile_identifier)
+        except:
+            return await client.disconnect()
         await client.disconnect()
         user = models.User(
             chat_id=chat.id,
@@ -307,4 +310,40 @@ class Bot:
                     parse_mode="markdown"
             )
 
+        # pegar dados de um usuario através de uma mnesagem encaminhada
+
+        @self.bot.message_handler(func=lambda message: not message is None and self.check_is_administrador_message)
+        def get_user_id(message:telebot.types.Message):
+            if message.forward_from:
+                chat_obj = message.forward_from
+                user_id = chat_obj.id
+                username = chat_obj.username if chat_obj.username else "desconhecido"
+                name = chat_obj.full_name
+            
+            elif message.forward_from_chat:
+                chat_obj:telebot.types.Chat = message.forward_from_chat
+                user_id = chat_obj.id
+                username = chat_obj.username if chat_obj.username else "desconhecido"
+                name = chat_obj.title
+            
+            else:
+                self.bot.send_message(
+                chat_id=message.chat.id,
+                text="não é possivel enviar os dados deste perfil, é provavel que o mesmo ocultou o acesso.",
+                reply_to_message_id=message.id)
+                return
+            
+            user = models.User(
+                user_id=user_id,
+                chat_id=user_id,
+                username=username,
+                name=name
+            )
+            self.database_connection.insert_user_cache(user)
+            self.bot.send_message(
+                chat_id=message.chat.id,
+                text= f'estes são os dados deste perfil:\n\nnome: {user.name}\nusuario: {f"@{user.username}" if user.username else "desconhecido" }\nuser_id: <code>{user_id}</code>',
+                reply_to_message_id=message.id,
+                parse_mode="html")
+    
         self.bot.infinity_polling()
