@@ -268,5 +268,43 @@ class Bot:
             except:
                 self.bot.answer_callback_query(call.id, text="ocorreu um erro ao sair desse grupo ou canal")
             
-        # inicia o bot
+        # adicionar ou remover dias no plano de um cliente
+
+        @self.bot.message_handler(commands=["plan"] ,func=self.check_is_administrador_message)
+        def plan_command(message:telebot.types.Message):
+            operation = re.findall(r"[+-]", message.text)
+            user_id =  re.findall(r"id:\s*(\d+)", message.text)
+            username = re.findall(r"username:(\S+)",message.text)
+            profile_identifier = user_id[0] if user_id else username[0] if username else False
+            if not profile_identifier:
+                return self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text="para atualizar o plano de um cliente é preciso informar o id ou o nome de usuario do mesmo, impossivel atualizar plano."
+            )
+
+            days = re.findall(r'\d+', message.text.replace(f"id:{profile_identifier}" if profile_identifier.isnumeric() else f"username:{profile_identifier}", ""))
+            if not days or not operation:
+                return self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text="além do id ou nome de usuario do cliente, é preciso também informar a operação (+ para acrecentar ou - para subtrair dias) e a quantidade de dias. impossivel atualizar plano."
+            )
+
+            client_new_data = self.database_connection.update_client_plan(days=days[0], profile_identifier=profile_identifier, operation=operation[0])
+            if client_new_data:
+                return self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text=f"a data programada para exclusão de {client_new_data[1]} de todos os grupos e canais foi alterada para *{client_new_data[0]}*",
+                    parse_mode="markdown"
+            )
+        
+            self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text=f"o usuario {profile_identifier} não foi encontrado no banco de dados.",
+                    parse_mode="markdown"
+            )
+
         self.bot.infinity_polling()

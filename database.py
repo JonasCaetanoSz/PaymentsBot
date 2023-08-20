@@ -80,3 +80,19 @@ class DataBase:
         )
         self.conn.commit()
         return plan_maturity
+    
+    # adicionar ou remover dias no plano de um cliente
+
+    def update_client_plan(self, days:str, profile_identifier:str, operation:str)-> bool|tuple:
+        sql = "SELECT * FROM clientes WHERE username = ? or user_id = ?" 
+        user = self.cursor.execute(sql, (profile_identifier, profile_identifier, )).fetchone()
+        if not user:
+            return False
+        plan_maturity = datetime.strptime(user[6], '%d/%m/%Y').date()
+        new_plan_maturity =  plan_maturity + timedelta(days=int(days)) if operation == "+" else plan_maturity - timedelta(days=(int(days)))
+        new_plan_maturity = new_plan_maturity.strftime("%d/%m/%Y")
+        sql = " UPDATE clientes SET plan_maturity = ? WHERE username = ? or user_id = ?"
+        self.cursor.execute(sql, (new_plan_maturity,profile_identifier, profile_identifier))
+        self.conn.commit()
+        user_identified = user[3] if not user[2] else f"@{user[2]}"
+        return new_plan_maturity, user_identified
