@@ -1,8 +1,11 @@
-from telethon import TelegramClient
 from database import DataBase
 import configparser
+import telethon
 import telebot
+import asyncio
 import models
+import time
+import re
 
 class Bot:
     def __init__(self,ignore_chat_events,telethon_session_name,administrator_chat_id,bot_token, telethon_api_hash, telethon_api_id) -> None:
@@ -22,8 +25,48 @@ class Bot:
     
     # obter dados de um perfil via cache, telebot ou telethon
 
-    def get_user_profile(profile_identifier:str) -> telebot.types.User|None:
-        pass
+    async def get_user_profile(self, profile_identifier:str) -> models.User:
+        
+        user:list = self.database_connection.get_user_cache(identify=profile_identifier)
+        if user:
+            return models.User(
+                user_id=user[0],
+                chat_id=user[1],
+                username=user[2],
+                name=user[3]
+
+            )
+        try:
+            chat:telebot.types.Chat = self.bot.get_chat(profile_identifier.isidentifier)
+        except:
+            chat = None
+        if chat:
+            user = models.User(
+                user_id=chat.id,
+                chat_id=chat.id,
+                username=chat.username,
+                name=chat.first_name
+
+            )
+            self.database_connection.insert_user_cache(user)
+            return user
+        
+        client = telethon.TelegramClient(
+            session=self.telethon_session_name,
+            api_hash=self.telethon_api_hash,
+            api_id=self.telethon_api_id
+        )
+        await client.start()
+        chat = await client.get_entity(profile_identifier)
+        await client.disconnect()
+        user = models.User(
+            chat_id=chat.id,
+            user_id=chat.id,
+            username=chat.username,
+            name= chat.title if isinstance(chat, telethon.types.Channel) else chat.first_name 
+        )
+        self.database_connection.insert_user_cache(user)
+        return user
     
     def run(self):
 
@@ -39,6 +82,38 @@ class Bot:
                 parse_mode='markdown'
             )
         
+        # listar todos grupos e canais que o bot é administrador
+
+        @self.bot.message_handler(commands=["chats"], func=self.check_is_administrador_message)
+        def chats_command(message:telebot.types.Message):
+            chats = [models.Chat(
+                chat_id=chat[0],
+                title=chat[1],
+                type_=chat[2]
+            ) for chat in self.database_connection.get_all_chats()]
+            if not chats:
+                return self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text="eu ainda não fui adicionado com administrador em nenhum grupo ou canal. portanto é impossivel enviar uma lista."
+            )
+        
+            markup = telebot.types.InlineKeyboardMarkup()
+            chat_index_count = 0
+            for chat in chats:
+                chat_index_count += 1
+                markup.add(telebot.types.InlineKeyboardButton(
+                    text=f"{chat_index_count} - {chat.title} ({chat.type_})",
+                    callback_data=f"quit:{chat.chat_id}"
+            ))
+            self.bot.send_message(
+                chat_id=message.chat.id,
+                text="eu sou administrador dos seguintes grupo e canais :",
+                reply_to_message_id=message.id,
+                reply_markup=markup
+            )
+        
+
         # administrador quer definir se o bot deve ou não processar evento quando é adicionado em um novo grupo ou canal
         
         @self.bot.message_handler(commands=['block_events'], func=self.check_is_administrador_message)
@@ -62,7 +137,82 @@ class Bot:
 
         @self.bot.message_handler(commands=["invite"], func=self.check_is_administrador_message)
         def generate_invite_link(message:telebot.types.Message):
-            pass
+            user_id =  re.findall(r"id:\s*(\d+)", message.text)
+            username = re.findall(r"username:(\S+)",message.text)
+            profile_identifier = user_id[0] if user_id else username[0] if username else False
+            if not profile_identifier:
+                return self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text="é preciso informar o nome de usuario ou o id de um perfil do telegram para gerar link de convite.\n\nvocê também pode usar o numero de telefone ou link do perfil para identificar um usuario."
+            )
+            channels_and_groups = [models.Chat(
+                chat_id=chat[0],
+                title=chat[1],
+                type_=chat[2]
+            ) for chat in self.database_connection.get_all_chats()]
+            if not channels_and_groups:
+                return self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text="o bot ainda não é administrador de nenhum grupo ou canal, impossivel gerar link de convite."
+            )
+
+            
+            user_permissions = [i for i in range(1, len(channels_and_groups) + 1)] if "*" in message.text.lower() else \
+                   re.findall(r'\d+', message.text.replace(f"id:{profile_identifier}", "")) if user_id else \
+                   re.findall(r'\d+', message.text.replace(f"username:{profile_identifier}", ""))
+            user_permissions = [int(n) for n in user_permissions] # passar pra int porque o findall vai retornar uma lista de string
+        
+            if not user_permissions or any(n > len(channels_and_groups) for n in user_permissions):
+                return  self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text="desculpe, não posso gerar os links de convite, verifique a sequencia de chats que o usuario poderá ter acesso.\n\ndigite a qualquer momento /chats para ver a lista completa ou use /invite * para gerar link de convite á todos os chats."
+            )
+            try:
+                user = asyncio.run(self.get_user_profile(profile_identifier))
+            except:
+                user = None
+            
+            if not user:
+                return self.bot.send_message(
+                    chat_id=message.chat.id,
+                    reply_to_message_id=message.id,
+                    text="desculpe mas não estou conseguindo encontrar este usuario, imposivel gerar link de convite."
+            )
+            main_message_id = self.bot.send_message(
+                chat_id=message.chat.id,
+                reply_to_message_id=message.id,
+                text="gerando links de convites ⏳"
+            ).id
+            
+
+            invite_links = ""
+            erros = ""
+            for index,chat in enumerate(channels_and_groups, start=1):
+                if not index in user_permissions:
+                    continue
+                try:
+                    invite_link = self.bot.create_chat_invite_link(chat_id=chat.chat_id, member_limit=1, expire_date=int(time.time()+86400)).invite_link
+                    self.database_connection.insert_client(user, chat)
+                    invite_links += f"\n\n{chat.title}:\n\n{invite_link}"
+                except Exception as e:
+                    erros += f"\n\n{chat.title}:\n\n{str(e)}"
+            
+            if invite_links:
+                self.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    text=invite_links,
+                    message_id=main_message_id
+            )
+            
+            if erros:
+                self.bot.send_message(
+                    chat_id=message.chat.id,
+                    text="erros que ocorreram ao gerar convites:" + erros,
+                    reply_to_message_id=message.id
+            )
 
         # alterações no estado do bot em um grupo ou canal
 
@@ -118,6 +268,5 @@ class Bot:
             except:
                 self.bot.answer_callback_query(call.id, text="ocorreu um erro ao sair desse grupo ou canal")
             
-        
         # inicia o bot
         self.bot.infinity_polling()

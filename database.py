@@ -1,5 +1,8 @@
+from datetime import datetime, timedelta
 import sqlite3
 import models
+import json
+
 
 class DataBase:
     def __init__(self) -> None:
@@ -9,7 +12,7 @@ class DataBase:
     
     def _execute_initial_querys(self) -> None:
         querys = [
-            'CREATE TABLE IF NOT EXISTS clientes (user_id INTEGER NOT NULL, chat_id INTEGER, username TEXT, name TEXT, chats TEXT, access_checked_in_chats TEXT, plan TEXT)',
+            'CREATE TABLE IF NOT EXISTS clientes (user_id INTEGER NOT NULL, chat_id INTEGER, username TEXT, name TEXT, chats TEXT, access_checked_in_chats TEXT, plan_maturity TEXT)',
             'CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER NOT NULL, title TEXT, type TEXT )',
             'CREATE TABLE IF NOT EXISTS cache_de_perfis (user_id INTEGER NOT NULL, chat_id INTEGER, username TEXT, name TEXT)',
         ]
@@ -30,3 +33,50 @@ class DataBase:
         sql = "DELETE FROM chats WHERE chat_id = ?"
         self.cursor.execute(sql,(chat.chat_id,))
         return self.conn.commit()
+    
+    # obter todos os grupos e canais no banco
+
+    def get_all_chats(self) -> [list]:
+        sql = "SELECT * FROM chats"
+        return self.cursor.execute(sql).fetchall()
+    
+    # adicionar o perfil de um usuario no cache
+
+    def insert_user_cache(self, user:models.User):
+        sql = "INSERT INTO cache_de_perfis (chat_id, user_id, name, username) VALUES (?,?,?,?)"
+        self.cursor.execute(sql, (user.chat_id, user.user_id, user.name , user.username))
+        return self.conn.commit()
+    
+    # pegar um usuario no cache
+
+    def get_user_cache(self, identify:str) -> list|None:
+        identify = str(identify)
+        sql = "SELECT * FROM cache_de_perfis WHERE chat_id = ?" if identify.isnumeric() else "SELECT * FROM cache_de_perfis WHERE username = ?"
+        user = self.cursor.execute(sql, (identify,)).fetchone()
+        return user
+    
+    # adicionar ou atualizar um cliente no banco
+
+    def insert_client(self, user:models.User, chat:models.Chat)  -> str:
+        client = self.conn.execute("SELECT * FROM clientes WHERE user_id = ?", (user.user_id,)).fetchone()
+        if client:
+            sql = " UPDATE clientes SET chats = ? WHERE user_id = ?"
+            data = json.loads(client[4])
+            data["chats"].append(chat.chat_id)
+            data["chats"] = list(set(data["chats"]))
+            self.cursor.execute(sql, (json.dumps(data), user.user_id,))
+            self.conn.commit()
+            return client[6]
+
+        sql = "INSERT INTO clientes (user_id,chat_id, username, name, chats, access_checked_in_chats, plan_maturity) VALUES (?,?,?,?,?,?,?)"
+        plan_maturity = datetime.now()   + timedelta(days=30)
+        plan_maturity = plan_maturity.strftime("%d/%m/%Y")
+        data = json.dumps({
+            "chats":[chat.chat_id]
+        })
+        access_checked_in_chats = json.dumps({"chats":[]})
+        self.cursor.execute(
+            sql, (user.user_id, user.chat_id, user.username,user.name, data, access_checked_in_chats, plan_maturity,)
+        )
+        self.conn.commit()
+        return plan_maturity
