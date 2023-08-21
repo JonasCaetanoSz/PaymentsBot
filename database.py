@@ -96,3 +96,23 @@ class DataBase:
         self.conn.commit()
         user_identified = user[3] if not user[2] else f"@{user[2]}"
         return new_plan_maturity, user_identified
+    
+    # atualizar chats que foi verificado se o cliente entrou
+    
+    def update_client_chats_checked(self,client:models.Client):
+        sql = "UPDATE clientes SET access_checked_in_chats = ? WHERE user_id = ?"
+        self.cursor.execute(sql, (json.dumps(client.access_checked_in_chats), client.user_id,))        
+        return self.conn.commit()
+    
+    # pegar todos os clientes no banco
+    
+    def get_all_clients(self) -> list:
+        sql = "SELECT * FROM clientes"
+        return self.cursor.execute(sql).fetchall()
+    
+    # remover um cliente do banco
+    
+    def delete_client(self, client:models.Client):
+        sql = "DELETE FROM clientes WHERE user_id = ?"
+        self.cursor.execute(sql,(client.user_id,))
+        return self.conn.commit()

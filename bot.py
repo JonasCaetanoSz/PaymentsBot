@@ -1,10 +1,12 @@
 from database import DataBase
+from threading import Thread
 import configparser
 import telethon
 import telebot
 import asyncio
 import models
 import time
+import scan
 import re
 
 class Bot:
@@ -111,7 +113,7 @@ class Bot:
             ))
             self.bot.send_message(
                 chat_id=message.chat.id,
-                text="eu sou administrador dos seguintes grupo e canais :",
+                text="eu sou administrador dos seguintes grupos e canais :",
                 reply_to_message_id=message.id,
                 reply_markup=markup
             )
@@ -299,8 +301,7 @@ class Bot:
                 return self.bot.send_message(
                     chat_id=message.chat.id,
                     reply_to_message_id=message.id,
-                    text=f"a data programada para exclusão de {client_new_data[1]} de todos os grupos e canais foi alterada para *{client_new_data[0]}*",
-                    parse_mode="markdown"
+                    text=f"a data programada para exclusão de {client_new_data[1]} de todos os grupos e canais foi alterada para {client_new_data[0]}",
             )
         
             self.bot.send_message(
@@ -317,21 +318,21 @@ class Bot:
             if message.forward_from:
                 chat_obj = message.forward_from
                 user_id = chat_obj.id
-                username = chat_obj.username if chat_obj.username else "desconhecido"
+                username = chat_obj.username
                 name = chat_obj.full_name
             
             elif message.forward_from_chat:
                 chat_obj:telebot.types.Chat = message.forward_from_chat
                 user_id = chat_obj.id
-                username = chat_obj.username if chat_obj.username else "desconhecido"
+                username = chat_obj.username
                 name = chat_obj.title
             
             else:
-                self.bot.send_message(
+                return self.bot.send_message(
                 chat_id=message.chat.id,
                 text="não é possivel enviar os dados deste perfil, é provavel que o mesmo ocultou o acesso.",
-                reply_to_message_id=message.id)
-                return
+                reply_to_message_id=message.id
+            )
             
             user = models.User(
                 user_id=user_id,
@@ -344,6 +345,15 @@ class Bot:
                 chat_id=message.chat.id,
                 text= f'estes são os dados deste perfil:\n\nnome: {user.name}\nusuario: {f"@{user.username}" if user.username else "desconhecido" }\nuser_id: <code>{user_id}</code>',
                 reply_to_message_id=message.id,
-                parse_mode="html")
-    
+                parse_mode="html"
+            )
+
+        Thread(
+            target=scan.daily_task,
+            daemon=True,
+            args=(
+            self.bot,
+            self.database_connection, self.administrator_chat_id
+            )
+        ).start()
         self.bot.infinity_polling()
