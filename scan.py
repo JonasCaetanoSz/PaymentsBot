@@ -1,11 +1,34 @@
+from telethon import TelegramClient
 from models import Client, Chat
 from datetime import datetime
 from database import DataBase
+import asyncio
 import telebot
 import json
 import time
 
-def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int) -> None:
+async def send_client_alert(cliente:Client, admin_chat_id:int,bot:telebot.TeleBot ,payments_configs:dict, telethon_session_name:str, telethon_api_hash:str, telethon_api_id:str):
+    try:
+        cl = TelegramClient(
+            session=telethon_session_name,
+            api_hash=telethon_api_hash,
+            api_id=telethon_api_id
+        )
+        await cl.start()
+        await cl.send_message(
+            cliente.chat_id,
+            payments_configs["client_invoice_private_message"].replace("@USER", cliente.name).replace("@BOT", f"@{bot.get_me().username}")
+        )
+
+    except:
+        await cl.disconnect()
+        bot.send_message(
+            chat_id=admin_chat_id,
+            text=f"ocorreu um erro ao enviar a mensagem de cobrança para {cliente.username if cliente.username else cliente.name}."
+        )
+
+
+def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int, payments_configs:dict, telethon_session_name:str, telethon_api_hash:str, telethon_api_id:str) -> None:
     main_message_id = bot.send_message(
         chat_id=admin_chat_id,
         text="*iniciando checagem diaria de membros ⏳*",
@@ -83,7 +106,7 @@ def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int) -> 
                     success_removed_message += f"\n\n{count} - {chat.title} ({chat.type_})"
                 except:
                     fail_count += 1
-                    fail_removed_message += f"\n\n{fail_count} - {chat.title} ({chat.title})"
+                    fail_removed_message += f"\n\n{fail_count} - {chat.title} ({chat.type_})"
         
         # plano do cliente expira em 3 dias
     
@@ -96,6 +119,7 @@ def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int) -> 
         # enviar as mensagens para o administrador
 
         if success_removed_message:
+            db_connection.delete_client_awaiting_invoice(cliente)
             db_connection.delete_client(client=cliente)
             bot.send_message(
                 chat_id=admin_chat_id,
@@ -104,6 +128,7 @@ def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int) -> 
             
         if fail_removed_message:
             db_connection.delete_client(client=cliente)
+            db_connection.delete_client_awaiting_invoice(cliente)
             bot.send_message(
                 chat_id=admin_chat_id,
                 text=f"o plano de {identifier} vence hoje mas não consegui remove-lo dos seguintes grupos e canais:" + fail_removed_message
@@ -114,6 +139,22 @@ def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int) -> 
                 chat_id=admin_chat_id,
                 text=f"o plano de {identifier} vence em 3 dias e será removido dos seguintes grupos e canais:" + next_due_date_message
         )
+            
+            # enviar a mensagem para o cliente também
+
+            if payments_configs["send_alert_for_client"] == "true":
+                db_connection.insert_client_awaiting_invoice(cliente)
+                asyncio.run(
+                    send_client_alert(
+                    cliente=cliente,
+                    admin_chat_id=admin_chat_id,
+                    bot=bot,
+                    payments_configs=payments_configs,
+                    telethon_session_name=telethon_session_name,
+                    telethon_api_id=telethon_api_id,
+                    telethon_api_hash=telethon_api_hash
+                    )
+        )
     
     bot.delete_message(
         chat_id=admin_chat_id,
@@ -123,10 +164,18 @@ def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int) -> 
 
 # checar todos os dias ás 00:00 noite
 
-def daily_task(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int) -> None:
+def daily_task(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int, payments_configs:dict, telethon_session_name:str, telethon_api_hash:str, telethon_api_id:str) -> None:
     while True:
         now = datetime.now()
-        if now.hour == 22:#and now.minute == 0:
-            checking(bot=bot, db_connection=db_connection, admin_chat_id=admin_chat_id)
+        if now.hour == 19: #:and now.minute == 0:
+            checking(
+                bot=bot,
+                db_connection=db_connection,
+                admin_chat_id=admin_chat_id,
+                payments_configs=payments_configs,
+                telethon_api_id=telethon_api_id,
+                telethon_session_name=telethon_session_name,
+                telethon_api_hash=telethon_api_hash
+            )
             time.sleep(60) # pra evitar checar mais de uma vez
         time.sleep(30) # aguarde 30 segundos antes de verificar a hora de novo

@@ -1,3 +1,4 @@
+from payments import Payments
 from database import DataBase
 from threading import Thread
 import configparser
@@ -10,7 +11,7 @@ import scan
 import re
 
 class Bot:
-    def __init__(self,ignore_chat_events,telethon_session_name,administrator_chat_id,bot_token, telethon_api_hash, telethon_api_id) -> None:
+    def __init__(self,ignore_chat_events,telethon_session_name,administrator_chat_id,bot_token, telethon_api_hash, telethon_api_id, **kwargs) -> None:
         self.ignore_chat_events = True if ignore_chat_events == "true" else False
         self.telethon_session_name = telethon_session_name
         self.administrator_chat_id = int(administrator_chat_id)
@@ -19,6 +20,13 @@ class Bot:
         self.database_connection = DataBase()
         self.token = bot_token
         self.bot = telebot.TeleBot(token=self.token)
+        self.payments_configs = kwargs
+        self.payments = Payments(
+            bot=self.bot,
+            db_connection=self.database_connection,
+            payments_configs=self.payments_configs,
+            admin_chat_id=self.administrator_chat_id
+        )
     
     # verificar se a mensagem foi enviada pelo chat do administrador
 
@@ -311,9 +319,47 @@ class Bot:
                     parse_mode="markdown"
             )
 
+        # gerar fatura com a stripe para o cliente
+        
+        @self.bot.message_handler(commands=["fatura"], func=lambda message: self.payments_configs["send_alert_for_client"] == "true")
+        def invoice_command(message:telebot.types.Message):
+            data = self.database_connection.get_client_awaiting_invoice(user_id=message.chat.id)
+            if not data:
+                return self.bot.send_message(
+                    text=self.payments_configs["payment_on_time_message"].replace("@USER", message.from_user.first_name),
+                    reply_to_message_id=message.id,
+                    chat_id=message.chat.id
+            )
+        
+            elif data[1]:
+                return self.bot.send_message(
+                    text="essa é sua fatura atual.",
+                    reply_to_message_id=data[1],
+                    chat_id=message.chat.id
+            )
+
+            price = telebot.types.LabeledPrice(
+                label="fatura",
+                amount=int(self.payments_configs["plan_value"])
+            )
+            invoice_message_id = self.bot.send_invoice(
+            title=self.payments_configs["invoice_title"],
+            description=self.payments_configs["invoice_description"].replace("@VALUE", self.payments_configs["plan_value_float"]), 
+            prices=[price],
+            currency="BRL",
+            provider_token=self.payments_configs["stripe_live_key"],
+            invoice_payload=str(message.chat.id),
+            protect_content=True,
+            chat_id=message.chat.id
+            ).id
+            self.database_connection.update_invoice_message_id(
+            message_id=invoice_message_id,
+            user_id=message.from_user.id
+            )
+
         # pegar dados de um usuario através de uma mnesagem encaminhada
 
-        @self.bot.message_handler(func=lambda message: not message is None and self.check_is_administrador_message)
+        @self.bot.message_handler(func=lambda message: not message is None and self.check_is_administrador_message(message) and message.forward_from or message.forward_from_chat)
         def get_user_id(message:telebot.types.Message):
             if message.forward_from:
                 chat_obj = message.forward_from
@@ -348,12 +394,26 @@ class Bot:
                 parse_mode="html"
             )
 
+            
+
         Thread(
             target=scan.daily_task,
             daemon=True,
             args=(
             self.bot,
-            self.database_connection, self.administrator_chat_id
+            self.database_connection,
+            self.administrator_chat_id,
+            self.payments_configs,
+            self.telethon_session_name,
+            self.telethon_api_hash,
+            self.telethon_api_id
             )
         ).start()
+        
+        if self.payments_configs["send_alert_for_client"] == "true":
+    
+            Thread(
+                target=self.payments.read_payment_intent,
+                daemon=True
+            ).start()
         self.bot.infinity_polling()

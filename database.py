@@ -15,6 +15,8 @@ class DataBase:
             'CREATE TABLE IF NOT EXISTS clientes (user_id INTEGER NOT NULL, chat_id INTEGER, username TEXT, name TEXT, chats TEXT, access_checked_in_chats TEXT, plan_maturity TEXT)',
             'CREATE TABLE IF NOT EXISTS chats (chat_id INTEGER NOT NULL, title TEXT, type TEXT )',
             'CREATE TABLE IF NOT EXISTS cache_de_perfis (user_id INTEGER NOT NULL, chat_id INTEGER, username TEXT, name TEXT)',
+            'CREATE TABLE IF NOT EXISTS clientes_esperando_fatura (user_id INTEGER NOT NULL, invoice_message_id INTEGER, username TEXT, name TEXT)',
+
         ]
         for sql in querys:
             self.cursor.execute(sql)
@@ -115,4 +117,32 @@ class DataBase:
     def delete_client(self, client:models.Client):
         sql = "DELETE FROM clientes WHERE user_id = ?"
         self.cursor.execute(sql,(client.user_id,))
+        return self.conn.commit()
+    
+    # adicionar um cliente na tabela de clientes que tem pendencias abertas
+
+    def insert_client_awaiting_invoice(self, client:models.Client):
+        sql = "INSERT INTO clientes_esperando_fatura (user_id,invoice_message_id, username, name) VALUES (?,?,?,?)"
+        self.cursor.execute(sql, (client.user_id, None, client.username, client.name,))
+        return self.conn.commit()
+    
+    # atualizar o id da mensagem de fatura
+
+    def update_invoice_message_id(self,user_id:int, message_id:int):
+        sql = "UPDATE clientes_esperando_fatura SET invoice_message_id = ? WHERE user_id = ?"
+        self.cursor.execute(sql, (message_id, user_id,))        
+        return self.conn.commit()
+    
+    # obter um cliente que tem fatura aberta
+
+    def get_client_awaiting_invoice(self, user_id:int ) -> list|None:
+        sql = "SELECT * FROM clientes_esperando_fatura WHERE user_id = ?"
+        return self.cursor.execute(sql, (user_id, )).fetchone()
+    
+    # apagar a fatura de um cliente
+    
+    def delete_client_awaiting_invoice(self, client:models.Client|str):
+        user_id = client.user_id if isinstance(client, models.Client) else client
+        sql = "DELETE FROM clientes_esperando_fatura WHERE user_id = ?"
+        self.cursor.execute(sql,(user_id,))
         return self.conn.commit()

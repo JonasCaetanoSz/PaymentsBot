@@ -24,7 +24,10 @@ async def telethon_login(telethon_session_name:str, telethon_api_hash:str, telet
 
 preferences_map = [
     'ignore_chat_events','telethon_session_name','administrator_chat_id',
-    'bot_token', 'telethon_api_hash', 'telethon_api_id'
+    'bot_token', 'telethon_api_hash', 'telethon_api_id', 'send_alert_for_client',
+    'stripe_endpoint_secret', 'stripe_test_key', 'stripe_live_key',
+    'client_invoice_private_message', 'invoice_description', 'plan_value', 'payment_on_time_message',
+    'invoice_title', 'plan_value_float', 'stripe_webhook_port'
 ]
 preferences = {}
 parser = configparser.ConfigParser()
