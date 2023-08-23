@@ -114,11 +114,11 @@ nome da fatura
 ##### porta que será utilizada para a stripe enviar notificação de pagamentos, em especial pagamentos bem-sucedidos que são os unicos eventos que escutamos e procesamos.
 ## Comandos
 
-- /chats (adminitrador)
+- /chats (administrador)
 
 ##### lista todos os grupos e canais que o bot foi adicionado como adminitrador, de acordo com seus index no banco de dados.
 
-- /invite (adminitrador)
+- /invite (administrador)
 
 ##### gerar link(s) de convite, este comando exige parametros obrigatorios username ou user_id e, o index de chats que o cliente tem permisão de entrar, exemplo:
 
@@ -136,7 +136,7 @@ nome da fatura
 /invite username:cliente_username chats 1 2 6
 ```
 
-- /plan (adminitrador)
+- /plan (administrador)
 
 ##### utilizado para atualizar o plano de um cliente, exemplo:
 
@@ -152,12 +152,12 @@ nome da fatura
 /plan username:cliente_username +15
 ```
 
-- /block_events (adminitrador)
+- /block_events (administrador)
 
 ##### te permite definir **ignore_chat_events** durante execução.
 
 
-- get client user_id (adminitrador)
+- get client user_id (administrador)
 
 ##### o telegram não obriga usuarios definir o nome de usuario. portanto em algumas Comandos que solicita o nome de usuario do cliente você pode substituir **username:** por **id:** . para obter o user_id de o cliente, basta encaminhar uma mensagem dele para o bot que vai ser enviado os dados de perfil dele, incluindo o user_id.
 
