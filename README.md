@@ -116,7 +116,7 @@ nome da fatura
 
 - /chats (administrador)
 
-##### lista todos os grupos e canais que o bot foi adicionado como adminitrador, de acordo com seus index no banco de dados.
+##### lista todos os grupos e canais que o bot foi adicionado como administrador, de acordo com seus index no banco de dados.
 
 - /invite (administrador)
 
@@ -159,7 +159,7 @@ nome da fatura
 
 - get client user_id (administrador)
 
-##### o telegram não obriga usuarios definir o nome de usuario. portanto em algumas Comandos que solicita o nome de usuario do cliente você pode substituir **username:** por **id:** . para obter o user_id de o cliente, basta encaminhar uma mensagem dele para o bot que vai ser enviado os dados de perfil dele, incluindo o user_id.
+##### o telegram não obriga usuarios definir o nome de usuario. portanto em algumas Comandos que solicita o nome de usuario do cliente você pode substituir **username:** por **id:** . para obter o user_id do cliente, basta encaminhar uma mensagem dele para o bot que vai ser enviado os dados de perfil dele, incluindo o user_id.
 
 - /fatura (cliente)
 
