@@ -167,7 +167,7 @@ def checking(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int, pay
 def daily_task(bot:telebot.TeleBot, db_connection:DataBase, admin_chat_id:int, payments_configs:dict, telethon_session_name:str, telethon_api_hash:str, telethon_api_id:str) -> None:
     while True:
         now = datetime.now()
-        if now.hour == 19: #:and now.minute == 0:
+        if now.hour == 0 and now.minute == 0:
             checking(
                 bot=bot,
                 db_connection=db_connection,
