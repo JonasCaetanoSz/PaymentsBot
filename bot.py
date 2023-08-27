@@ -8,6 +8,7 @@ import asyncio
 import models
 import time
 import scan
+import sys
 import re
 
 class Bot:
@@ -416,4 +417,13 @@ class Bot:
                 target=self.payments.read_payment_intent,
                 daemon=True
             ).start()
-        self.bot.infinity_polling()
+            for i in range(0,500):
+                try:
+                    self.bot.infinity_polling()
+
+                except KeyboardInterrupt: # para que não seja necessario pressionar CTRL + C 500 vezes
+                    sys.exit(0)
+
+                except:
+                    pass
+                
